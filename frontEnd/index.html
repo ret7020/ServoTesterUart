@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+		integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.9.1/font/bootstrap-icons.css" rel="stylesheet">
+
+	<title>Servo Tester </title>
+</head>
+
+<body>
+	<div class="container mt-4">
+		<div class="row">
+			<div class="col-md-6">
+				<div class="p-3 mb-2 bg-secondary text-white" id="servo_0_box">Servo 0 (<span
+						id="servo_0_pin">N/A</span>)</div>
+			</div>
+			<div class="col-md-6">
+				<div class="p-3 mb-2 bg-secondary text-white" id="servo_1_box">Servo 1 (<span
+						id="servo_1_pin">N/A</span>)</div>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-md-6">
+				<div class="p-3 mb-2 bg-secondary text-white" id="servo_2_box">Servo 2 (<span
+						id="servo_2_pin">N/A</span>)</div>
+			</div>
+			<div class="col-md-6">
+				<div class="p-3 mb-2 bg-secondary text-white" id="servo_3_box">Servo 3 (<span
+						id="servo_3_pin">N/A</span>)</div>
+			</div>
+		</div>
+		<button class="btn btn-primary" id="connectToSerial" onclick="connectSerial()">CONNECT</button>
+	</div>
+
+
+	<div class="container">
+		<div class="row">
+			<div class="col">
+				<div class="p-3 mb-2 mt-5 bg-secondary text-white">
+					<h5>Logs</h5>
+					<span class="text-white" id="logs"></span>
+				</div>
+
+			</div>
+		</div>
+	</div>
+
+	<div class="container my-5">
+		<footer class="text-center text-white">
+			<div class="container pt-4">
+				<section>
+					<a class="btn btn-link btn-floating btn-lg text-dark m-1" target="__blank"
+						href="https://github.com/ret7020" role="button" data-mdb-ripple-color="dark"><i
+							class="bi bi-github"></i></a>
+				</section>
+			</div>
+			<div class="text-center text-dark p-1">
+				UART Servo Tester
+			</div>
+		</footer>
+	</div>
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+		integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+		crossorigin="anonymous"></script>
+	<script>
+		// Start config
+		var CONFIG_BAUD = 9600;
+		var port, textEncoder, writableStreamClosed, writer, historyIndex = -1;
+
+		// Runtime get config after Arduino reset on serial open
+		var CONFIG_CHANNEL_OFFSET, CONFIG_CHANNELS;
+		const lineHistory = [];
+		async function connectSerial() {
+
+			port = await navigator.serial.requestPort();
+			await port.open({ baudRate: CONFIG_BAUD });
+
+			textEncoder = new TextEncoderStream();
+			writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
+			writer = textEncoder.writable.getWriter();
+			await listenToPort();
+
+		}
+		async function listenToPort() {
+			const textDecoder = new TextDecoderStream();
+			const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+			const reader = textDecoder.readable.getReader();
+
+			while (true) {
+				const { value, done } = await reader.read();
+				if (done) {
+					console.log('[readLoop] DONE', done);
+					reader.releaseLock();
+					break;
+				}
+				try {
+					let data = JSON.parse(value);
+					if (data.type == "config") {
+						// Connect OK - CORRECT DEVICE, read config
+						CONFIG_CHANNEL_OFFSET = data.offset;
+						CONFIG_CHANNELS = data.count;
+
+						document.getElementById("connectToSerial").remove();
+						document.getElementById("logs").innerHTML += `Got config from board: OFFSET=${CONFIG_CHANNEL_OFFSET}; CHANNELS=${CONFIG_CHANNELS}`;
+						for (i = 0; i <= 3; i++) {
+							document.getElementById("servo_" + i + "_pin").innerHTML = `D${CONFIG_CHANNEL_OFFSET + i}`;
+							document.getElementById("servo_" + i + "_box").classList.remove("bg-secondary");
+							document.getElementById("servo_" + i + "_box").classList.add("bg-success")
+						}
+					}
+				} catch (e) {
+					console.warn("NON JSON");
+				}
+			}
+		}
+
+		async function sendCommand(payload) {
+			await writer.write(JSON.stringify(payload));
+		}
+
+		async function angleControl(channel, angle) {
+
+		}
+
+
+
+
+	</script>
+</body>
+
+</html>
